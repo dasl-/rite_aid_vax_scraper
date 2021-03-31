@@ -76,10 +76,44 @@ const RIDE_AID_QUEENS_IDS = [
 
 require_once "vendor/autoload.php";
 use Abraham\TwitterOAuth\TwitterOAuth;
-define('CONSUMER_KEY', 'redacted');
-define('CONSUMER_SECRET', 'redacted');
-define('ACCESS_TOKEN', 'redacted');
-define('ACCESS_TOKEN_SECRET', 'redacted');
+
+function helpMessage($exit = 0) {
+    echo <<<EOT
+Usage: php rite_aid_vax.php > rite_aid_vax.log
+    -a  twitter CONSUMER_KEY (required)
+    -b  twitter CONSUMER_SECRET (required)
+    -c  twitter ACCESS_TOKEN (required)
+    -d  twitter ACCESS_TOKEN_SECRET (required)
+    -e  email for notifications (optional)
+    -i  slack channel without leading '#' (shell out to post to slack?) (optional)
+    -j  slack host (optional)
+    -k  slack port (optional)
+EOT;
+
+    exit($exit);
+}
+
+function getArgs($args) {
+    if (
+        !isset($args['a']) || !isset($args['b']) || !isset($args['c']) || !isset($args['d'])
+    ) {
+        helpMessage(1);
+        return;
+    }
+
+    return [
+        'twitter_consumer_key' => $args['a'],
+        'twitter_consumer_secret' => $args['b'],
+        'twitter_access_token' => $args['c'],
+        'twitter_access_token_secret' => $args['d'],
+        'email' => $args['e'] ?? null,
+        'slack' => [
+            'channel' => $args['i'] ?? null,
+            'host' => $args['j'] ?? null,
+            'port' => $args['k'] ?? null,
+        ],
+    ];
+}
 
 function getVaxData($id) {
     $ch = curl_init();
@@ -133,20 +167,48 @@ function doLog($msg) {
     echo "[$date] $msg\n";
 }
 
-function doNotify($subj, $msg, $twitter_conn) {
-    doLog("called doNotify for: $subj $msg");
+function notifyVaccineAvailability($locations_with_vaccines_to_notify_about, $twitter_conn, $slack_args) {
+    if (count($locations_with_vaccines_to_notify_about) > 3) {
+        $location_lines = implode("\n", $locations_with_vaccines_to_notify_about);
+        $gist_cmd = "echo $location_lines | /home/dleibovic/bin/gist --filename ritenyc";
+        exec($gist_cmd, $output, $code);
+        $output_text = trim(implode("\n", $output));
+        if ($code !== 0) {
+            throw new Exception("gist creation got exit code: $code and output: $output_text");
+        }
+        $msg = "Found rite aid vaccine at many locations. See all locations with availablity here: $output_text and sign up here: https://www.riteaid.com/covid-vaccine-apt";
+    } else {
+        $msg = "Found rite aid vaccine at these locations: " . implode('; ', $locations_with_vaccines_to_notify_about) .
+            " https://www.riteaid.com/covid-vaccine-apt";
+    }
+    doLog("called notifyVaccineAvailability for: $msg");
     // mail("redacted@redacted.com", $subj, $msg);
-    $status = "$msg   time: " . microtime(true);
+    slackNotify($msg, $slack_args);
+    $status = "$msg id: " . time();
     $post_tweets = $twitter_conn->post("statuses/update", ["status" => $status]);
     var_dump($post_tweets);
 }
 
+function slackNotify($msg, $slack_args) {
+    if ($slack_args['channel'] && $slack_args['host'] && $slack_args['port']) {
+        $cmd = "echo '#{$slack_args['channel']} $msg' | nc {$slack_args['host']} {$slack_args['port']}";
+        exec($cmd);
+    }
+}
+
 const ERROR_INTERVAL_LENGTH = 60 * 10; // 10 mins
 function main() {
+    $args = getopt("ha:b:c:d:e:i:j:k:");
+    if (isset($args["h"])) {
+        helpMessage();
+    }
+    $args = getArgs($args);
+
     $error_interval_start_time = time();
     $num_errors_in_interval = 0;
 
-    $twitter_conn = new TwitterOAuth(CONSUMER_KEY, CONSUMER_SECRET, ACCESS_TOKEN, ACCESS_TOKEN_SECRET);
+    $twitter_conn = new TwitterOAuth($args['twitter_consumer_key'], $args['twitter_consumer_secret'],
+        $args['twitter_access_token'], $args['twitter_access_token_secret']);
     $location_to_last_posting_date_map = [];
 
     while (true) {
@@ -180,11 +242,10 @@ function main() {
             }
 
             if ($locations_with_vaccines_to_notify_about) {
-                doNotify(
-                    "Found rite aid vaccine",
-                    "Found rite aid vaccine at these locations: " . implode(', and ', $locations_with_vaccines_to_notify_about) .
-                        " https://www.riteaid.com/covid-vaccine-apt",
-                    $twitter_conn
+                notifyVaccineAvailability(
+                    $locations_with_vaccines_to_notify_about,
+                    $twitter_conn,
+                    $args['slack']
                 );
             }
         } catch (Exception $e) {
@@ -193,18 +254,17 @@ function main() {
         }
 
         if ($num_errors_in_interval >= 10) {
-            doLog("Got $num_errors_in_interval errors. Exiting.");
-            doNotify("Got $num_errors_in_interval errors.", "Exiting");
-            exit(1);
+            $interval_length_mins = round(ERROR_INTERVAL_LENGTH / 60, 2);
+            doLog("Got $num_errors_in_interval errors in past $interval_length_mins mins. Sleeping for 5 minutes...");
+            sleep(60 * 5);
         }
         if (time() > ($error_interval_start_time + ERROR_INTERVAL_LENGTH)) {
             $error_interval_start_time = time();
             $num_errors_in_interval = 0;
         }
 
-        sleep(5);
+        sleep(30);
     }
 }
 
 main();
-
