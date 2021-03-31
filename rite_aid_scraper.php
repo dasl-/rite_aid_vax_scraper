@@ -184,7 +184,6 @@ function notifyVaccineAvailability($locations_with_vaccines, $twitter_conn, $sla
             " https://www.riteaid.com/covid-vaccine-apt";
     }
     doLog("called notifyVaccineAvailability for: $msg");
-    // mail("redacted@redacted.com", $subj, $msg);
     slackNotify($msg, $slack_args);
     $status = "$msg id: " . time();
     $post_tweets = $twitter_conn->post("statuses/update", ["status" => $status]);
@@ -201,6 +200,11 @@ function slackNotify($msg, $slack_args) {
         $cmd = "echo '#{$slack_args['channel']} $msg' | nc {$slack_args['host']} {$slack_args['port']}";
         exec($cmd);
     }
+}
+
+function notifyAboutErrors($msg, $slack_args, $email) {
+    slackNotify($msg, $slack_args);
+    mail($email, "Getting vax bot errors!", $msg);
 }
 
 const ERROR_INTERVAL_LENGTH = 60 * 10; // 10 mins
@@ -255,6 +259,11 @@ function main() {
         if ($num_errors_in_interval >= 10) {
             $interval_length_mins = round(ERROR_INTERVAL_LENGTH / 60, 2);
             doLog("Got $num_errors_in_interval errors in past $interval_length_mins mins. Sleeping for 5 minutes...");
+            notifyAboutErrors(
+                "Getting lots of errors - updates may be delayed. Might need to check on the bot and fix something cc <@dasl> ! Last error: $e",
+                $args['slack'],
+                $args['email']
+            );
             sleep(60 * 5);
         }
         if (time() > ($error_interval_start_time + ERROR_INTERVAL_LENGTH)) {
