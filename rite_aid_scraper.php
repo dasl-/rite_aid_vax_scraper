@@ -167,9 +167,9 @@ function doLog($msg) {
     echo "[$date] $msg\n";
 }
 
-function notifyVaccineAvailability($locations_with_vaccines_to_notify_about, $twitter_conn, $slack_args) {
-    if (count($locations_with_vaccines_to_notify_about) > 3) {
-        $location_lines = implode("\n", $locations_with_vaccines_to_notify_about);
+function notifyVaccineAvailability($locations_with_vaccines, $twitter_conn, $slack_args) {
+    if (count($locations_with_vaccines) > 3) {
+        $location_lines = implode("\n", $locations_with_vaccines);
         $gist_cmd = "echo $location_lines | /home/dleibovic/bin/gist --filename ritenyc";
         exec($gist_cmd, $output, $code);
         $output_text = trim(implode("\n", $output));
@@ -178,7 +178,7 @@ function notifyVaccineAvailability($locations_with_vaccines_to_notify_about, $tw
         }
         $msg = "Found rite aid vaccine at many locations. See all locations with availablity here: $output_text and sign up here: https://www.riteaid.com/covid-vaccine-apt";
     } else {
-        $msg = "Found rite aid vaccine at these locations: " . implode('; ', $locations_with_vaccines_to_notify_about) .
+        $msg = "Found rite aid vaccine at these locations: " . implode('; ', $locations_with_vaccines) .
             " https://www.riteaid.com/covid-vaccine-apt";
     }
     doLog("called notifyVaccineAvailability for: $msg");
@@ -186,7 +186,12 @@ function notifyVaccineAvailability($locations_with_vaccines_to_notify_about, $tw
     slackNotify($msg, $slack_args);
     $status = "$msg id: " . time();
     $post_tweets = $twitter_conn->post("statuses/update", ["status" => $status]);
-    var_dump($post_tweets);
+    if ($twitter_conn->getLastHttpCode() === 200) {
+        // Tweet posted successfully
+    } else {
+        var_dump($post_tweets);
+        throw new Exception("Error posting tweet!");
+    }
 }
 
 function slackNotify($msg, $slack_args) {
@@ -209,8 +214,7 @@ function main() {
 
     $twitter_conn = new TwitterOAuth($args['twitter_consumer_key'], $args['twitter_consumer_secret'],
         $args['twitter_access_token'], $args['twitter_access_token_secret']);
-    $location_to_last_posting_date_map = [];
-
+    $last_locations_with_vaccines = [];
     while (true) {
         try {
             $locations_with_vaccines = [];
@@ -226,27 +230,17 @@ function main() {
                 usleep(20000); // 20ms
             }
 
-            $now = time();
-            $locations_with_vaccines_to_notify_about = [];
-            foreach ($locations_with_vaccines as $location) {
-                if (
-                    isset($location_to_last_posting_date_map[$location]) &&
-                    $now - $location_to_last_posting_date_map[$location] < 60 // post about a location at most once per minute. Helps with twitter rate limits: https://developer.twitter.com/ja/docs/basics/rate-limits (300 tweets per 3 hrs)
-                ) {
-                    doLog("Removed $location because it was recently notified about.");
-                    continue;
+            if ($locations_with_vaccines) {
+                if ($last_locations_with_vaccines == $locations_with_vaccines) {
+                    doLog("Skipping notifying about current set of locations because it is same as previous set");
+                    $last_locations_with_vaccines = []; // we will post about them if they are the same next time.
                 } else {
-                    $location_to_last_posting_date_map[$location] = $now;
-                    $locations_with_vaccines_to_notify_about[] = $location;
+                    notifyVaccineAvailability(
+                        $locations_with_vaccines,
+                        $twitter_conn,
+                        $args['slack']
+                    );
                 }
-            }
-
-            if ($locations_with_vaccines_to_notify_about) {
-                notifyVaccineAvailability(
-                    $locations_with_vaccines_to_notify_about,
-                    $twitter_conn,
-                    $args['slack']
-                );
             }
         } catch (Exception $e) {
             $num_errors_in_interval++;
@@ -268,3 +262,4 @@ function main() {
 }
 
 main();
+
