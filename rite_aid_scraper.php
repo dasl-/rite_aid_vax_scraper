@@ -242,9 +242,11 @@ function main() {
                         $twitter_conn,
                         $args['slack']
                     );
+                    $last_locations_with_vaccines = $locations_with_vaccines;
                 }
+            } else {
+                $last_locations_with_vaccines = $locations_with_vaccines;
             }
-            $last_locations_with_vaccines = $locations_with_vaccines;
         } catch (Exception $e) {
             $num_errors_in_interval++;
             doLog("Caught exception: $e. Num errors in interval: $num_errors_in_interval.");
