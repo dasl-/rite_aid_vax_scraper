@@ -170,7 +170,9 @@ function doLog($msg) {
 function notifyVaccineAvailability($locations_with_vaccines, $twitter_conn, $slack_args) {
     if (count($locations_with_vaccines) > 3) {
         $location_lines = implode("\n", $locations_with_vaccines);
-        $gist_cmd = "echo $location_lines | /home/dleibovic/bin/gist --filename ritenyc";
+        $gist_cmd = "echo '$location_lines' | /home/dleibovic/bin/gist --filename ritenyc";
+        $output = null;
+        $code = null;
         exec($gist_cmd, $output, $code);
         $output_text = trim(implode("\n", $output));
         if ($code !== 0) {
@@ -242,6 +244,7 @@ function main() {
                     );
                 }
             }
+            $last_locations_with_vaccines = $locations_with_vaccines;
         } catch (Exception $e) {
             $num_errors_in_interval++;
             doLog("Caught exception: $e. Num errors in interval: $num_errors_in_interval.");
@@ -262,4 +265,3 @@ function main() {
 }
 
 main();
-
