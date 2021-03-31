@@ -1,4 +1,8 @@
 # FAQ
+* In the "COVID Qualifier" form, use the zip code from the Location in the Tweet that brought you here:
+
+![form1](img//form.png)
+
 * After selecting a location, you may get an errors on either the location selection screen or the calendar screen that comes next. Here's what to do about them:
 
 ![error1](img//jank.png)
