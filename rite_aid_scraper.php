@@ -2621,6 +2621,9 @@ function notifyAboutErrors($msg, $slack_args, $email) {
 function getRiteAidStoreMap($query) {
     if ($query !== null) {
         return array_filter(ALL_IDS, function($store) use ($query) {
+            if (substr($query, 0, 1) === '/') {
+                return preg_match($query, $store) === 1;
+            }
             return stripos($store, $query) !== false;
         });
     }
