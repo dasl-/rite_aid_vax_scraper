@@ -2497,7 +2497,7 @@ Usage: php rite_aid_vax.php > rite_aid_vax.log
     -j  slack host (optional)
     -k  slack port (optional)
     -q  scan rite aids that match this string (optional; defaults to NYC locations)'
-
+    -p  paste command (optional; defaults to dasls gist script)'
 EOT;
 
     exit($exit);
@@ -2518,6 +2518,7 @@ function getArgs($args) {
         'twitter_access_token_secret' => $args['d'],
         'email' => $args['e'] ?? null,
         'query' => $args['q'] ?? null,
+        'paste_cmd' => $args['p'] ?? '/home/dleibovic/bin/gist --filename ritenyc',
         'slack' => [
             'channel' => $args['i'] ?? null,
             'host' => $args['j'] ?? null,
@@ -2578,16 +2579,18 @@ function doLog($msg) {
     echo "[$date] $msg\n";
 }
 
-function notifyVaccineAvailability($locations_with_vaccines, $twitter_conn, $slack_args) {
+function notifyVaccineAvailability($locations_with_vaccines, $twitter_conn, $args) {
+    $slack_args = $args['slack'];
+    $paste_cmd = $args['paste_cmd'];
     if (count($locations_with_vaccines) > 3) {
         $location_lines = implode("\n", $locations_with_vaccines);
-        $gist_cmd = "echo '$location_lines' | /home/dleibovic/bin/gist --filename ritenyc";
+        $gist_cmd = "echo '$location_lines' | $paste_cmd";
         $output = null;
         $code = null;
         exec($gist_cmd, $output, $code);
         $output_text = trim(implode("\n", $output));
         if ($code !== 0) {
-            throw new Exception("gist creation got exit code: $code and output: $output_text");
+            throw new Exception("paste command got exit code: $code and output: $output_text");
         }
         $msg = "Found rite aid vaccine at many locations. See all locations with availablity here: $output_text and sign up here: https://www.riteaid.com/covid-vaccine-apt";
     } else {
@@ -2632,7 +2635,7 @@ function getRiteAidStoreMap($query) {
 
 const ERROR_INTERVAL_LENGTH = 60 * 10; // 10 mins
 function main() {
-    $args = getopt("ha:b:c:d:e:i:j:k:");
+    $args = getopt("ha:b:c:d:e:i:j:k:q:p:");
     if (isset($args["h"])) {
         helpMessage();
     }
@@ -2667,7 +2670,7 @@ function main() {
                     notifyVaccineAvailability(
                         $locations_with_vaccines,
                         $twitter_conn,
-                        $args['slack']
+                        $args,
                     );
                     $last_locations_with_vaccines = $locations_with_vaccines;
                 }
