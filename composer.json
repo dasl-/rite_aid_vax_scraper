@@ -1,0 +1,6 @@
+{
+    "name": "dasl/rite_aid_vax_scraper",
+    "require": {
+        "abraham/twitteroauth": "^2.0"
+    }
+}
