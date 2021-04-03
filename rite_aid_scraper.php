@@ -2613,7 +2613,7 @@ function notifyVaccineAvailability($locations_with_vaccines, $twitter_conn, $arg
 
 function slackNotify($msg, $slack_args) {
     if ($slack_args['channel'] && $slack_args['host'] && $slack_args['port']) {
-        $cmd = "echo '#{$slack_args['channel']} $msg' | nc {$slack_args['host']} {$slack_args['port']}";
+        $cmd = "echo '#{$slack_args['channel']} $msg' | timeout --kill-after 10 5 nc {$slack_args['host']} {$slack_args['port']}";
         exec($cmd);
     }
 }
