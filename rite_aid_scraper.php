@@ -2498,6 +2498,7 @@ Usage: php rite_aid_vax.php > rite_aid_vax.log
     -k  slack port (optional)
     -q  scan rite aids that match this string (optional; defaults to NYC locations)'
     -p  paste command (optional; defaults to dasls gist script)'
+    -t  number of seconds to sleep between scans (optional; defaults to 30)'
 EOT;
 
     exit($exit);
@@ -2518,6 +2519,7 @@ function getArgs($args) {
         'twitter_access_token_secret' => $args['d'],
         'email' => $args['e'] ?? null,
         'query' => $args['q'] ?? null,
+        'sleep_sec' => (int)($args['t'] ?? 30),
         'paste_cmd' => $args['p'] ?? '/home/dleibovic/bin/gist --filename ritenyc',
         'slack' => [
             'channel' => $args['i'] ?? null,
@@ -2635,7 +2637,7 @@ function getRiteAidStoreMap($query) {
 
 const ERROR_INTERVAL_LENGTH = 60 * 10; // 10 mins
 function main() {
-    $args = getopt("ha:b:c:d:e:i:j:k:q:p:");
+    $args = getopt("ha:b:c:d:e:i:j:k:q:p:t:");
     if (isset($args["h"])) {
         helpMessage();
     }
@@ -2697,7 +2699,7 @@ function main() {
             $num_errors_in_interval = 0;
         }
 
-        sleep(30);
+        sleep($args['sleep_sec']);
     }
 }
 
