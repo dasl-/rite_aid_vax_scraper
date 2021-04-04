@@ -2684,7 +2684,7 @@ function main() {
             doLog("Caught exception: $e. Num errors in interval: $num_errors_in_interval.");
         }
 
-        if ($num_errors_in_interval >= 10) {
+        if ($num_errors_in_interval >= 5) {
             $interval_length_mins = round(ERROR_INTERVAL_LENGTH / 60, 2);
             doLog("Got $num_errors_in_interval errors in past $interval_length_mins mins. Sleeping for 5 minutes...");
             notifyAboutErrors(
